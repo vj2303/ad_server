@@ -14,10 +14,25 @@ const Ad = () => {
     metaBusinesses 
   } = useMetaAccounts();
   
-  const [userData, setUserData] = useState(null);
+  const [userData, setUserData] = useState(() => {
+    // Initialize userData from localStorage if available
+    const savedUserData = localStorage.getItem('facebook_user_data');
+    return savedUserData ? JSON.parse(savedUserData) : null;
+  });
+  
   const [error, setError] = useState(null);
-  const [businesses, setBusinesses] = useState([]);
-  const [adAccounts, setAdAccounts] = useState([]);
+  
+  const [businesses, setBusinesses] = useState(() => {
+    // Initialize businesses from localStorage if available
+    const savedBusinesses = localStorage.getItem('facebook_businesses');
+    return savedBusinesses ? JSON.parse(savedBusinesses) : [];
+  });
+  
+  const [adAccounts, setAdAccounts] = useState(() => {
+    // Initialize adAccounts from localStorage if available
+    const savedAdAccounts = localStorage.getItem('facebook_ad_accounts');
+    return savedAdAccounts ? JSON.parse(savedAdAccounts) : [];
+  });
   
   // State to manage selected brands and ad accounts
   const [selectedBusinesses, setSelectedBusinesses] = useState(() => {
@@ -63,6 +78,9 @@ const Ad = () => {
       if (response.authResponse) {
         const accessToken = response.authResponse.accessToken;
         
+        // Store access token in session storage (not localStorage for security reasons)
+        sessionStorage.setItem('facebook_access_token', accessToken);
+        
         // Fetch new data while preserving existing selections
         fetchUserData(accessToken);
         fetchBusinesses(accessToken);
@@ -80,6 +98,9 @@ const Ad = () => {
       .then((response) => response.json())
       .then((data) => {
         setUserData(data);
+        // Store Facebook user data in localStorage
+        localStorage.setItem('facebook_user_data', JSON.stringify(data));
+        
         // Store Facebook user ID in localStorage for reference
         if (data && data.id) {
           localStorage.setItem('facebook_user_id', data.id);
@@ -99,6 +120,8 @@ const Ad = () => {
       .then((response) => response.json())
       .then((data) => {
         setBusinesses(data.data);
+        // Store businesses in localStorage
+        localStorage.setItem('facebook_businesses', JSON.stringify(data.data));
         fetchBrandAdAccounts(data.data, accessToken);
       })
       .catch((error) => {
@@ -131,11 +154,35 @@ const Ad = () => {
           }))
         );
         setAdAccounts(processedAdAccounts);
+        // Store ad accounts in localStorage
+        localStorage.setItem('facebook_ad_accounts', JSON.stringify(processedAdAccounts));
+        
+        // Restore selected states if this is a re-login
+        restoreSelectedStates(processedAdAccounts);
       })
       .catch((error) => {
         console.error('Error fetching brand ad accounts:', error);
         toast.error('Error fetching ad accounts');
       });
+  };
+  
+  // Restore selected states after fetching fresh data
+  const restoreSelectedStates = (newAdAccounts) => {
+    // This function ensures selections are maintained even if new data is fetched
+    // It's especially useful when the user reconnects or after page refresh
+    
+    // For any new accounts that weren't in the previous selection state,
+    // we need to initialize their selection state (defaulting to false)
+    const updatedAdAccountSelections = {...selectedAdAccounts};
+    
+    newAdAccounts.forEach(account => {
+      if (updatedAdAccountSelections[account.id] === undefined) {
+        updatedAdAccountSelections[account.id] = false;
+      }
+    });
+    
+    setSelectedAdAccounts(updatedAdAccountSelections);
+    localStorage.setItem('selectedAdAccounts', JSON.stringify(updatedAdAccountSelections));
   };
 
   // Handle Brand Selection
@@ -172,7 +219,7 @@ const Ad = () => {
       [adAccountId]: !selectedAdAccounts[adAccountId]
     };
     setSelectedAdAccounts(updatedAdAccounts);
-    localStorage.setItem('selectedAdAccounts', JSON.stringify(updatedSelectedAdAccounts));
+    localStorage.setItem('selectedAdAccounts', JSON.stringify(updatedAdAccounts));
 
     // Automatically select/deselect the business when all its ad accounts are selected/deselected
     const businessAdAccounts = adAccounts
@@ -180,7 +227,7 @@ const Ad = () => {
       .map(account => account.id);
     
     const allAdAccountsSelected = businessAdAccounts.every(
-      accountId => accountId === adAccountId ? !selectedAdAccounts[accountId] : selectedAdAccounts[accountId]
+      accountId => accountId === adAccountId ? updatedAdAccounts[accountId] : updatedAdAccounts[accountId]
     );
 
     const updatedBusinesses = {
@@ -274,6 +321,26 @@ const Ad = () => {
     }
   };
 
+  // Check for stored data on component mount
+  useEffect(() => {
+    const accessToken = sessionStorage.getItem('facebook_access_token');
+    
+    // If we have stored businesses but no access token, we can still render them
+    // If we have an access token, we refresh the data (optional - remove if you want to rely only on localStorage)
+    if (accessToken && businesses.length === 0) {
+      fetchUserData(accessToken);
+      fetchBusinesses(accessToken);
+    }
+  }, []);
+
+  // Determine the button text based on whether we have ad accounts
+  const getButtonText = () => {
+    if (adAccounts && adAccounts.length > 0) {
+      return "Change Facebook Brands";
+    }
+    return "Connect with Facebook";
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col">
@@ -285,7 +352,7 @@ const Ad = () => {
               className="bg-blue-500 text-white py-3 px-6 rounded-lg text-lg font-semibold transition duration-300 hover:bg-blue-600 shadow-md"
               onClick={loginWithAdsPermission}
             >
-              Connect with Facebook
+              {getButtonText()}
             </button>
           </div>
 
