@@ -1,0 +1,92 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 0 0% 10%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 70%;
+
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border antialiased;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .smooth-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-white/20;
+  }
+  
+  .section-padding {
+    @apply px-6 md:px-12 lg:px-24 py-20;
+  }
+  
+  .case-study-card {
+    @apply relative overflow-hidden rounded-xl bg-nomad-100 shadow-sm hover:shadow-md transition-all duration-500 ease-out;
+  }
+  
+  .case-study-card:hover .case-study-image {
+    @apply scale-105;
+  }
+  
+  .case-study-image {
+    @apply w-full h-full object-cover transition-all duration-500 ease-out;
+  }
+
+  .container-small {
+    @apply max-w-5xl mx-auto px-6;
+  }
+  
+  .container-large {
+    @apply max-w-7xl mx-auto px-6;
+  }
+}
