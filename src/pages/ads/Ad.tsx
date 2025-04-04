@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import DashboardLayout from '@/components/layout/DashboardLayout';
-import AccountsPage from './AccountPage';
 import { useAuth } from '@/context/AuthContext';
 import { useMetaAccounts } from '@/context/MetaAccountsContext';
 
@@ -16,33 +15,58 @@ const Ad = () => {
   
   const [userData, setUserData] = useState(() => {
     // Initialize userData from localStorage if available
-    const savedUserData = localStorage.getItem('facebook_user_data');
-    return savedUserData ? JSON.parse(savedUserData) : null;
+    try {
+      const savedUserData = localStorage.getItem('facebook_user_data');
+      return savedUserData ? JSON.parse(savedUserData) : null;
+    } catch (error) {
+      console.error("Error parsing user data from localStorage:", error);
+      return null;
+    }
   });
   
   const [error, setError] = useState(null);
   
   const [businesses, setBusinesses] = useState(() => {
     // Initialize businesses from localStorage if available
-    const savedBusinesses = localStorage.getItem('facebook_businesses');
-    return savedBusinesses ? JSON.parse(savedBusinesses) : [];
+    try {
+      const savedBusinesses = localStorage.getItem('facebook_businesses');
+      return savedBusinesses ? JSON.parse(savedBusinesses) : [];
+    } catch (error) {
+      console.error("Error parsing businesses from localStorage:", error);
+      return [];
+    }
   });
   
   const [adAccounts, setAdAccounts] = useState(() => {
     // Initialize adAccounts from localStorage if available
-    const savedAdAccounts = localStorage.getItem('facebook_ad_accounts');
-    return savedAdAccounts ? JSON.parse(savedAdAccounts) : [];
+    try {
+      const savedAdAccounts = localStorage.getItem('facebook_ad_accounts');
+      return savedAdAccounts ? JSON.parse(savedAdAccounts) : [];
+    } catch (error) {
+      console.error("Error parsing ad accounts from localStorage:", error);
+      return [];
+    }
   });
   
   // State to manage selected brands and ad accounts
   const [selectedBusinesses, setSelectedBusinesses] = useState(() => {
-    const savedBusinesses = localStorage.getItem('selectedBusinesses');
-    return savedBusinesses ? JSON.parse(savedBusinesses) : {};
+    try {
+      const savedBusinesses = localStorage.getItem('selectedBusinesses');
+      return savedBusinesses ? JSON.parse(savedBusinesses) : {};
+    } catch (error) {
+      console.error("Error parsing selected businesses from localStorage:", error);
+      return {};
+    }
   });
   
   const [selectedAdAccounts, setSelectedAdAccounts] = useState(() => {
-    const savedAdAccounts = localStorage.getItem('selectedAdAccounts');
-    return savedAdAccounts ? JSON.parse(savedAdAccounts) : {};
+    try {
+      const savedAdAccounts = localStorage.getItem('selectedAdAccounts');
+      return savedAdAccounts ? JSON.parse(savedAdAccounts) : {};
+    } catch (error) {
+      console.error("Error parsing selected ad accounts from localStorage:", error);
+      return {};
+    }
   });
 
   // Facebook SDK initialization
@@ -55,7 +79,7 @@ const Ad = () => {
           appId: '750785526415113',
           cookie: true,
           xfbml: true,
-          version: 'v22.0',
+          version: 'v17.0', // Updated to a valid version
         });
       };
 
@@ -74,6 +98,11 @@ const Ad = () => {
 
   // Login with Ads Permission
   const loginWithAdsPermission = () => {
+    if (!window.FB) {
+      toast.error('Facebook SDK not loaded yet. Please try again in a moment.');
+      return;
+    }
+    
     FB.login(function (response) {
       if (response.authResponse) {
         const accessToken = response.authResponse.accessToken;
@@ -92,11 +121,20 @@ const Ad = () => {
 
   // Fetch User Data
   const fetchUserData = (accessToken) => {
-    const url = `https://graph.facebook.com/v22.0/me?fields=id,name,email&access_token=${accessToken}`;
+    const url = `https://graph.facebook.com/v17.0/me?fields=id,name,email&access_token=${accessToken}`;
 
     fetch(url)
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then((data) => {
+        if (data.error) {
+          throw new Error(data.error.message || 'Facebook API error');
+        }
+        
         setUserData(data);
         // Store Facebook user data in localStorage
         localStorage.setItem('facebook_user_data', JSON.stringify(data));
@@ -107,41 +145,76 @@ const Ad = () => {
         }
       })
       .catch((error) => {
-        setError('Error fetching data');
-        console.error(error);
+        setError(`Error fetching user data: ${error.message}`);
+        console.error('User data fetch error:', error);
+        toast.error(`Failed to fetch user data: ${error.message}`);
       });
   };
 
   // Fetch Businesses
   const fetchBusinesses = (accessToken) => {
-    const businessesUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
+    const businessesUrl = `https://graph.facebook.com/v17.0/me/businesses?fields=id,name&limit=100&access_token=${accessToken}`;
   
     fetch(businessesUrl)
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then((data) => {
-        setBusinesses(data.data);
+        if (data.error) {
+          throw new Error(data.error.message || 'Facebook API error');
+        }
+        
+        setBusinesses(data.data || []);
         // Store businesses in localStorage
-        localStorage.setItem('facebook_businesses', JSON.stringify(data.data));
-        fetchBrandAdAccounts(data.data, accessToken);
+        localStorage.setItem('facebook_businesses', JSON.stringify(data.data || []));
+        
+        if (Array.isArray(data.data) && data.data.length > 0) {
+          fetchBrandAdAccounts(data.data, accessToken);
+        } else {
+          toast.info('No businesses found for this account');
+        }
       })
       .catch((error) => {
         console.error('Error fetching businesses:', error);
-        toast.error('Error fetching businesses');
+        toast.error(`Error fetching businesses: ${error.message}`);
       });
   };
 
   // Fetch Brand Ad Accounts
   const fetchBrandAdAccounts = (businesses, accessToken) => {
     const adAccountPromises = businesses.map((business) => {
-      const brandAdAccountUrl = `https://graph.facebook.com/v22.0/${business.id}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
+      const brandAdAccountUrl = `https://graph.facebook.com/v17.0/${business.id}/owned_ad_accounts?fields=id,name&access_token=${accessToken}`;
 
       return fetch(brandAdAccountUrl)
-        .then((response) => response.json())
-        .then((data) => ({
-          businessId: business.id,
-          businessName: business.name,
-          accounts: data.data
-        }));
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          if (data.error) {
+            throw new Error(data.error.message || 'Facebook API error');
+          }
+          
+          return {
+            businessId: business.id,
+            businessName: business.name,
+            accounts: data.data || []
+          };
+        })
+        .catch((error) => {
+          console.error(`Error fetching ad accounts for business ${business.id}:`, error);
+          // Return empty accounts for this business but don't fail the whole request
+          return {
+            businessId: business.id,
+            businessName: business.name,
+            accounts: []
+          };
+        });
     });
 
     Promise.all(adAccountPromises)
@@ -161,8 +234,8 @@ const Ad = () => {
         restoreSelectedStates(processedAdAccounts);
       })
       .catch((error) => {
-        console.error('Error fetching brand ad accounts:', error);
-        toast.error('Error fetching ad accounts');
+        console.error('Error processing ad accounts:', error);
+        toast.error(`Error processing ad accounts: ${error.message}`);
       });
   };
   
@@ -276,7 +349,7 @@ const Ad = () => {
       };
 
       // Don't send if no accounts selected
-      if (accountsPayload.meta_businesses.length === 0) {
+      if (!accountsPayload.meta_businesses.length) {
         toast.error('Please select at least one ad account to save.');
         return;
       }
@@ -321,15 +394,19 @@ const Ad = () => {
     }
   };
 
-  // Check for stored data on component mount
+  // Check for stored data on component mount with proper error handling
   useEffect(() => {
-    const accessToken = sessionStorage.getItem('facebook_access_token');
-    
-    // If we have stored businesses but no access token, we can still render them
-    // If we have an access token, we refresh the data (optional - remove if you want to rely only on localStorage)
-    if (accessToken && businesses.length === 0) {
-      fetchUserData(accessToken);
-      fetchBusinesses(accessToken);
+    try {
+      const accessToken = sessionStorage.getItem('facebook_access_token');
+      
+      // If we have an access token, we refresh the data
+      if (accessToken) {
+        fetchUserData(accessToken);
+        fetchBusinesses(accessToken);
+      }
+    } catch (error) {
+      console.error("Error on component mount:", error);
+      setError("Error initializing component: " + error.message);
     }
   }, []);
 
@@ -340,6 +417,9 @@ const Ad = () => {
     }
     return "Connect with Facebook";
   };
+  
+  // Guard against SSR/hydration issues by checking if we're in browser environment
+  const isBrowser = typeof window !== 'undefined';
 
   return (
     <DashboardLayout>
@@ -348,80 +428,90 @@ const Ad = () => {
         {/* Main Content */}
         <div className="p-6">
           <div className="flex justify-center mb-8">
-            <button
-              className="bg-blue-500 text-white py-3 px-6 rounded-lg text-lg font-semibold transition duration-300 hover:bg-blue-600 shadow-md"
-              onClick={loginWithAdsPermission}
-            >
-              {getButtonText()}
-            </button>
+            {isBrowser && (
+              <button
+                className="bg-blue-500 text-white py-3 px-6 rounded-lg text-lg font-semibold transition duration-300 hover:bg-blue-600 shadow-md"
+                onClick={loginWithAdsPermission}
+              >
+                {getButtonText()}
+              </button>
+            )}
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              <p className="font-medium">Error:</p>
+              <p>{error}</p>
+            </div>
+          )}
 
           {userData && (
             <div className="mb-8">
               <h3 className="text-xl font-semibold text-orange-600 mb-6">Brands & Ad Accounts:</h3>
-              <ul className="space-y-4 bg-white shadow-sm rounded-md">
-                {businesses.map((business) => {
-                  const businessAdAccounts = adAccounts.filter(
-                    account => account.businessId === business.id
-                  );
+              {businesses.length > 0 ? (
+                <ul className="space-y-4 bg-white shadow-sm rounded-md">
+                  {businesses.map((business) => {
+                    const businessAdAccounts = adAccounts.filter(
+                      account => account.businessId === business.id
+                    );
 
-                  return (
-                    <li key={business.id} className="border p-4 rounded-lg">
-                      <div className="flex items-center mb-2">
-                        <input
-                          type="checkbox"
-                          checked={!!selectedBusinesses[business.id]}
-                          onChange={() => handleBusinessSelect(business.id)}
-                          className="mr-2"
-                        />
-                        <h4 className="font-bold text-blue-600">Brand: {business.name}</h4>
-                      </div>
+                    return (
+                      <li key={business.id} className="border p-4 rounded-lg">
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={!!selectedBusinesses[business.id]}
+                            onChange={() => handleBusinessSelect(business.id)}
+                            className="mr-2"
+                          />
+                          <h4 className="font-bold text-blue-600">Brand: {business.name}</h4>
+                        </div>
 
-                      {businessAdAccounts.length > 0 && (
-                        <ul className="pl-6 space-y-2">
-                          {businessAdAccounts.map((account) => (
-                            <li
-                              key={account.id}
-                              className="flex items-center text-gray-700"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={!!selectedAdAccounts[account.id]}
-                                onChange={() => handleAdAccountSelect(account.id, business.id)}
-                                className="mr-2"
-                              />
-                              Ad account: {account.name}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                        {businessAdAccounts.length > 0 ? (
+                          <ul className="pl-6 space-y-2">
+                            {businessAdAccounts.map((account) => (
+                              <li
+                                key={account.id}
+                                className="flex items-center text-gray-700"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!selectedAdAccounts[account.id]}
+                                  onChange={() => handleAdAccountSelect(account.id, business.id)}
+                                  className="mr-2"
+                                />
+                                Ad account: {account.name}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-500 pl-6">No ad accounts found for this brand</p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-gray-600">No brands found. Please connect with Facebook to view your brands.</p>
+              )}
 
-                      {businessAdAccounts.length === 0 && (
-                        <p className="text-gray-500 pl-6">No ad accounts found for this brand</p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-
-              <div className="mt-6">
-                <button 
-                  className="bg-blue-600 px-4 py-2 cursor-pointer text-white rounded-xl shadow-md hover:bg-blue-700 transition duration-300"
-                  onClick={handleSaveAccount}
-                  disabled={Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length === 0 || contextLoading}
-                >
-                  {contextLoading ? 'Saving...' : 'Save Selected Accounts'}
-                </button>
-              </div>
-
-              {error && <p className="text-red-500 mt-4">{error}</p>}
+              {businesses.length > 0 && (
+                <div className="mt-6">
+                  <button 
+                    className={`px-4 py-2 cursor-pointer text-white rounded-xl shadow-md transition duration-300 ${
+                      Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length === 0 || contextLoading
+                        ? 'bg-blue-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                    onClick={handleSaveAccount}
+                    disabled={Object.keys(selectedAdAccounts).filter(accountId => selectedAdAccounts[accountId]).length === 0 || contextLoading}
+                  >
+                    {contextLoading ? 'Saving...' : 'Save Selected Accounts'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
-        </div>
-
-        {/* Display AccountsPage */}
-        <div className="mt-4">
-          {/* <AccountsPage /> */}
         </div>
       </div>
     </DashboardLayout>
