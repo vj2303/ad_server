@@ -110,13 +110,61 @@ const Ad = () => {
         // Store access token in session storage (not localStorage for security reasons)
         sessionStorage.setItem('facebook_access_token', accessToken);
         
+        // Also store access token for later use with PATCH API
+        localStorage.setItem('meta_access_token', accessToken);
+        
         // Fetch new data while preserving existing selections
         fetchUserData(accessToken);
         fetchBusinesses(accessToken);
+        
+        // Update the meta_access_token via PATCH API
+        updateMetaAccessToken(accessToken);
       } else {
         toast.error('Login was cancelled or failed');
       }
     }, { scope: 'ads_read, business_management', return_scopes: true });
+  };
+  
+  // Function to update meta_access_token via PATCH API
+  const updateMetaAccessToken = async (accessToken) => {
+    try {
+      // Get infoId from localStorage or user object
+      const infoId = localStorage.getItem('info_id');
+      
+      if (!infoId) {
+        console.warn('No info ID found. The token update will be attempted during save.');
+        return;
+      }
+      
+      const token = localStorage.getItem('adcreativex_token');
+      if (!token) {
+        toast.error('Authentication token not found. Please log in again.');
+        return;
+      }
+      
+      const response = await fetch(`https://metaback-production.up.railway.app/api/info/${infoId}/add-token`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          meta_access_token: accessToken
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update Meta access token');
+      }
+      
+      const data = await response.json();
+      console.log('Meta access token updated successfully:', data);
+      toast.success('Meta access token updated successfully');
+    } catch (error) {
+      console.error('Error updating Meta access token:', error);
+      // Don't show error to the user yet, we'll try again during save
+    }
   };
 
   // Fetch User Data
@@ -315,12 +363,99 @@ const Ad = () => {
   // Save Selected Accounts - Using the context
   const handleSaveAccount = async () => {
     try {
-      // Get businessId from context if available
-      const businessId = metaBusinesses.length > 0 && metaBusinesses[0]._id 
-        ? metaBusinesses[0]._id 
-        : localStorage.getItem('facebook_user_id') || 
-          (userData && userData.id) || 
-          'facebook_user';
+      // Get businessId from context if available, otherwise use the stored info_id
+      let infoId = localStorage.getItem('info_id');
+      const accessToken = localStorage.getItem('meta_access_token') || sessionStorage.getItem('facebook_access_token');
+
+      if (!infoId) {
+        // We don't have an info_id stored, so we'll try to get it from the API response
+        // This is a fallback in case the info was created but not stored locally
+        const token = localStorage.getItem('adcreativex_token');
+        if (!token) {
+          toast.error('Authentication token not found. Please log in again.');
+          return;
+        }
+
+        // If we have metaBusinesses from context, try to use the first one's ID
+        if (metaBusinesses && metaBusinesses.length > 0 && metaBusinesses[0]._id) {
+          infoId = metaBusinesses[0]._id;
+        } else {
+          // If no info_id exists yet, we'll need to create one
+          // First check if we have user data
+          if (!user) {
+            toast.error('User data not found. Please log in again.');
+            return;
+          }
+
+          // Create a new info record
+          try {
+            const createInfoResponse = await fetch(`https://metaback-production.up.railway.app/api/info`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                companyName: user.companyName || 'Default Company',
+                industryName: user.industry || 'Technology',
+                companyWebsite: user.website || 'https://example.com',
+                companyType: user.role === 'brand' ? 'Brand' : 'Creator',
+                meta_access_token: accessToken
+              })
+            });
+
+            if (!createInfoResponse.ok) {
+              const errorData = await createInfoResponse.json();
+              throw new Error(errorData.message || 'Failed to create info record');
+            }
+
+            const infoData = await createInfoResponse.json();
+            infoId = infoData.data._id;
+            
+            // Store the info_id for future use
+            localStorage.setItem('info_id', infoId);
+            
+            toast.success('Business info created successfully');
+          } catch (error) {
+            console.error('Error creating info record:', error);
+            toast.error(`Failed to create info record: ${error.message}`);
+            return;
+          }
+        }
+      }
+
+      // If we have an info_id by this point, use it to update the meta_access_token
+      if (infoId && accessToken) {
+        const token = localStorage.getItem('adcreativex_token');
+        if (!token) {
+          toast.error('Authentication token not found. Please log in again.');
+          return;
+        }
+
+        try {
+          const tokenUpdateResponse = await fetch(`https://metaback-production.up.railway.app/api/info/${_id}/add-token`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              meta_access_token: accessToken
+            })
+          });
+
+          if (!tokenUpdateResponse.ok) {
+            const errorData = await tokenUpdateResponse.json();
+            console.error('Failed to update Meta access token:', errorData);
+            // Continue with the save operation even if token update fails
+          } else {
+            console.log('Meta access token updated successfully');
+          }
+        } catch (error) {
+          console.error('Error updating Meta access token:', error);
+          // Continue with the save operation even if token update fails
+        }
+      }
 
       // Group selected accounts by business
       const selectedBusinessIds = Object.keys(selectedBusinesses)
@@ -328,7 +463,7 @@ const Ad = () => {
 
       // Create the payload structure according to the expected format
       const accountsPayload = {
-        businessId: businessId,
+        businessId: infoId || 'default_business_id',
         meta_businesses: selectedBusinessIds.map(businessId => {
           // Find business info
           const business = businesses.find(b => b.id === businessId);
@@ -359,8 +494,8 @@ const Ad = () => {
       
       // Store the businessId from the response for future use
       if (response && response.data && response.data._id) {
-        localStorage.setItem('current_business_id', response.data.businessId);
-        console.log('Business ID saved:', response.data.businessId);
+        localStorage.setItem('info_id', response.data._id);
+        console.log('Info ID saved:', response.data._id);
       }
       
       // Show success toast
@@ -399,6 +534,16 @@ const Ad = () => {
     try {
       const accessToken = sessionStorage.getItem('facebook_access_token');
       
+      // Check if we have an info_id stored from a previous signup/login response
+      // This is used for the PATCH endpoint
+      const infoIdFromSignup = localStorage.getItem('info_id');
+      if (!infoIdFromSignup && user) {
+        // If no info_id but we have user data, check for metaBusinesses from context
+        if (metaBusinesses && metaBusinesses.length > 0 && metaBusinesses[0]._id) {
+          localStorage.setItem('info_id', metaBusinesses[0]._id);
+        }
+      }
+      
       // If we have an access token, we refresh the data
       if (accessToken) {
         fetchUserData(accessToken);
@@ -408,7 +553,7 @@ const Ad = () => {
       console.error("Error on component mount:", error);
       setError("Error initializing component: " + error.message);
     }
-  }, []);
+  }, [metaBusinesses]);
 
   // Determine the button text based on whether we have ad accounts
   const getButtonText = () => {
