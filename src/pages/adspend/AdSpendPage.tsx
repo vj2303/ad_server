@@ -278,7 +278,7 @@ export function AdSpendPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-4">
+          {/* <div className="flex items-center justify-between mb-4">
             <Tabs defaultValue="day" className="w-auto" onValueChange={setActiveTab}>
               <TabsList>
                 <TabsTrigger value="day">Daily</TabsTrigger>
@@ -306,7 +306,7 @@ export function AdSpendPage() {
                 </PopoverContent>
               </Popover>
             </div>
-          </div>
+          </div> */}
 
           <div className="space-y-4">
             {isLoading ? (
