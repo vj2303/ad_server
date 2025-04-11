@@ -17,6 +17,7 @@ import Profile from './pages/profile/Profile';
 import Ads from './pages/ads/Ad'
 import Saved from './pages/saved'
 import AccountsPage from './pages/ads/AccountPage';
+import { AdSpendPage } from './pages/adspend/AdSpendPage';
 
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
               <Route path="/ads" element={<Ads />} />
               <Route path="/ads" element={<AccountsPage />} />
               <Route path="/saved" element={<Saved />} />
+              <Route path="/adspend" element={<AdSpendPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster />

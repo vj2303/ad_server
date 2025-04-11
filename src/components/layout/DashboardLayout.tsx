@@ -54,6 +54,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       name: 'Ads & Creatives',
       href: '/ads',
       icon: UserCircle,
+    },
+    {
+      name: 'Dashboard',
+      href: '/adspend',
+      icon: UserCircle,
     }
     // {
     //   name: 'Saved Ads',
